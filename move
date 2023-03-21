@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class Patrol : MonoBehaviour
+public class G : MonoBehaviour
 {
     public Transform[] waypoints;   // 巡邏點的位置
     public float moveSpeed = 2f;    // 移動速度
