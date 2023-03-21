@@ -1,77 +1,76 @@
 using UnityEngine;
-using System.Collections;
 
-public class CharacterScript : MonoBehaviour
+public class Patrol : MonoBehaviour
 {
-    public float patrolRadius = 10f; // 巡邏半徑
-    public float speed = 5f; // 移動速度
-    public float dodgeDistance = 3f; // 閃避距離
+    public Transform[] waypoints;   // 巡邏點的位置
+    public float moveSpeed = 2f;    // 移動速度
+    public float turnSpeed = 90f;   // 轉向速度
+    public float minDistance = 0.1f; // 到達巡邏點的最小距離
+    public float evadeDistance = 2f; // 閃避敵人的距離
 
-    private Vector3 startingPosition; // 初始位置
-    private Vector3 destination; // 巡邏目的地
-    private bool isDodging = false; // 是否正在閃避
-    private GameObject[] enemies; // 敵人陣列
+    private int currentWaypoint = 0; // 目前巡邏點的編號
+    private Vector3 direction;      // 移動方向
+    private bool isEvading = false; // 是否正在閃避敵人
+    private Transform enemy;        // 敵人的位置
 
     void Start()
     {
-        startingPosition = transform.position; // 記錄初始位置
-        SetRandomDestination(); // 設定隨機目的地
-        enemies = GameObject.FindGameObjectsWithTag("Enemy"); // 取得所有敵人
+        // 設定初始巡邏點
+        transform.position = waypoints[currentWaypoint].position;
     }
 
     void Update()
     {
-        if (!isDodging)
+        // 如果正在閃避敵人，直接返回
+        if (isEvading) return;
+
+        // 如果到達目前巡邏點，切換到下一個巡邏點
+        if (Vector3.Distance(transform.position, waypoints[currentWaypoint].position) < minDistance)
         {
-            Patrol(); // 巡邏
+            currentWaypoint = (currentWaypoint + 1) % waypoints.Length;
+        }
+
+        // 計算移動方向
+        direction = waypoints[currentWaypoint].position - transform.position;
+        direction.y = 0f;
+        direction.Normalize();
+
+        // 轉向巡邏點
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(direction), turnSpeed * Time.deltaTime);
+
+        // 移動到巡邏點
+        transform.position += transform.forward * moveSpeed * Time.deltaTime;
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        // 如果碰到敵人，開始閃避
+        if (other.CompareTag("Enemy"))
+        {
+            enemy = other.transform;
+            isEvading = true;
+            InvokeRepeating("Evade", 0f, 0.5f);
         }
     }
 
-    void Patrol()
+    void Evade()
     {
-        // 如果到達目的地，設定新的目的地
-        if (Vector3.Distance(transform.position, destination) < 1f)
+        // 計算閃避方向
+        Vector3 evadeDirection = transform.position - enemy.position;
+        evadeDirection.y = 0f;
+        evadeDirection.Normalize();
+
+        // 轉向閃避方向
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(evadeDirection), turnSpeed * Time.deltaTime);
+
+        // 閃避移動
+        transform.position += transform.forward * moveSpeed * Time.deltaTime * 2f;
+
+        // 如果敵人離開閃避範圍，停止閃避
+        if (Vector3.Distance(transform.position, enemy.position) > evadeDistance)
         {
-            SetRandomDestination();
+            isEvading = false;
+            CancelInvoke("Evade");
         }
-
-        // 移動向目的地
-        transform.position = Vector3.MoveTowards(transform.position, destination, speed * Time.deltaTime);
-
-        // 檢查是否有敵人在攻擊範圍內，如果是，進行閃避
-        foreach (GameObject enemy in enemies)
-        {
-            if (Vector3.Distance(transform.position, enemy.transform.position) < dodgeDistance)
-            {
-                Dodge(enemy.transform.position);
-            }
-        }
-    }
-
-    void SetRandomDestination()
-    {
-        // 設定目的地為在巡邏範圍內的一個隨機位置
-        destination = startingPosition + Random.insideUnitSphere * patrolRadius;
-        destination.y = startingPosition.y;
-    }
-
-    void Dodge(Vector3 enemyPosition)
-    {
-        // 閃避到敵人背後
-        Vector3 dodgeDirection = (transform.position - enemyPosition).normalized;
-        Vector3 dodgePosition = enemyPosition + dodgeDirection * dodgeDistance;
-        transform.position = dodgePosition;
-
-        isDodging = true;
-
-        // 在0.5秒後結束閃避
-        StartCoroutine(EndDodge(0.5f));
-    }
-
-    IEnumerator EndDodge(float delay)
-    {
-        yield return new WaitForSeconds(delay);
-
-        isDodging = false;
     }
 }
